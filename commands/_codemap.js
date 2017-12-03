@@ -9,6 +9,8 @@ module.exports = {
   'trade': require('./trade'),
   'buy': require('./buy'),
   'sell': require('./sell'),
+  'monitor': require('./monitor'),
+  'maker': require('./maker'),
 
   'list[20]': '#commands.list-selectors',
   'list[30]': '#commands.list-strategies',
@@ -16,5 +18,7 @@ module.exports = {
   'list[60]': '#commands.sim',
   'list[70]': '#commands.trade',
   'list[80]': '#commands.buy',
-  'list[90]': '#commands.sell'
+  'list[90]': '#commands.sell',
+  'list[100]': '#commands.monitor',
+  'list[110]': '#commands.maker'
 }

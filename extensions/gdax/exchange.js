@@ -4,11 +4,19 @@ var Gdax = require('gdax')
 module.exports = function container (get, set, clear) {
   var c = get('conf')
 
-  var public_client, authed_client
+  var client_list = new Map();
+  
+//  var public_client
+  var authed_client
 
   function publicClient (product_id) {
-    if (!public_client) public_client = new Gdax.PublicClient(product_id, c.gdax.apiURI)
-    return public_client
+    if (client_list.has(product_id)) {
+      return client_list.get(product_id)
+    } else {
+      var foo = new Gdax.PublicClient(product_id, c.gdax.apiURI)
+      client_list.set(product_id, foo)
+      return foo
+    }
   }
 
   function authedClient () {
@@ -135,6 +143,45 @@ module.exports = function container (get, set, clear) {
         if (err) return cb(err)
         cb(null, body)
       })
+    },
+    
+    getBook: function(opts, cb) {
+      var client = publicClient(opts.product_id)
+      client.getProductOrderBook({'level': 2}, function(err, resp, body) {
+        if (!err) err = statusErr(resp, body)
+        if (err) return cb(err)
+        //console.log(body)
+        cb(null, body)
+      });
+    },
+    
+    // get the stats from a window of opts.minutes
+    getXminstats: function(opts, cb) {
+      var client = publicClient(opts.product_id)
+      var now = new Date()
+      opts.minutes = Number(opts.minutes)
+      
+      function addMinutes(date, minutes) {
+          return new Date(date.getTime() + minutes*60000);
+      }
+      var MinutesAgo = addMinutes(now, -opts.minutes)
+      
+      client.getProductHistoricRates({'start': MinutesAgo.toISOString(), 'end': now.toISOString(), "granularity": 60*1000*opts.minutes},
+       function(err, resp, body) {
+        if (!err) err = statusErr(resp, body)
+        if (err) return cb(err)
+        cb(null, body)
+      });
+    },
+    
+    get24hourstats: function(opts, cb) {
+      var client = publicClient(opts.product_id)
+      client.getProduct24HrStats(function(err, resp, body) {
+        if (!err) err = statusErr(resp, body)
+        if (err) return cb(err)
+        //console.log(body)
+        cb(null, body)
+      });
     },
 
     // return the property used for range querying.

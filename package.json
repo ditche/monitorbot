@@ -17,6 +17,7 @@
     "minimist": "^1.2.0",
     "moment": "^2.18.1",
     "mongodb": "^2.2.25",
+    "nodemailer": "^4.0.1",
     "number-abbreviate": "^2.0.0",
     "numbro": "git+https://github.com/carlos8f/numbro.git",
     "poloniex.js": "0.0.7",

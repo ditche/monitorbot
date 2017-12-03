@@ -1,0 +1,34 @@
+sudo service mongod restart
+
+./zenbot.sh buy --order_adjust_time=10000 --max_slippage_pct=0.2 --size=1 gdax.BTC-USD
+
+./zenbot.sh buy --spread 2 --max_val 6000 gdax.LTC-USD
+
+./zenbot.sh monitor --poll_time=360
+
+sudo date -s "$(wget -qSO- --max-redirect=0 google.com 2>&1 | grep Date: | cut -d' ' -f5-8)Z"
+
+Braket buy
+./zenbot.sh buy --order_adjust_time=50000 --max_slippage_pct=6 --markup_pct=1 --size=2 gdax.ETH-USD
+
+Trailing stop limit
+./zenbot.sh sell gdax.LTC-USD --stop_pct=1.5 --limit_pct=1 --type='trailing' --size=8 --update_time=120
+./zenbot.sh sell gdax.ETH-USD --stop_pct=1.2 --limit_pct=1.1 --type='trailing' --size=10 --update_time=120 --above=208
+./zenbot.sh sell gdax.ETH-USD --stop_pct=3 --limit_pct=2.2 --type='trailing' --size=4 --update_time=120 --peak_window=120
+
+===
+
+high volume times: 10:30pm
+low volume times: 9pm , 12:30am
+
+== trade
+
+./zenbot.sh trade gdax.LTC-USD --strategy=channel --period=15m --order_type=taker --order_adjust_time=30000 --markup_pct=-0.2 --asset_capital=10 --currency_capital=400 --reserve_capital
+
+
+== time sync
+
+sudo VBoxService --timesync-set-threshold 3000
+
+./zenbot.sh monitor --rebalance --trigger_pct=3 --poll_time=180
+
