@@ -75,7 +75,7 @@ module.exports = function container (get, set, clear) {
         s.currency = 'USD'
         // how much of each asset is in cold storage?
         var reserved_assets = [0,0,0]
-        var reserved_cash = 3000
+        var reserved_cash = 6000 - 1468
         var leverage = 1.5
         
         // initialize the exchanges
@@ -89,92 +89,36 @@ module.exports = function container (get, set, clear) {
           new_s.product_id = selector_parts[1]
           new_s.asset_change = 0
           new_s.currency_change = 0
-          
+          new_s.reserved = reserved_assets[i]
           ss.push(new_s)
         }
         
         // ==== Allocation settings ====
         // global variables
-        var target_prop = [.0900, .6000, .2000]
+        var target_prop = [.100, .6000, .2000]
         // old
         // var target_prop = [.1100, .6000, .2000]
         var cash_target = 0.15
-        // initial target
-        setTargets(0.22)
+        
         // read the target values from file
         try {
           monitor_settings = require("../monitor.json");
           target_prop = monitor_settings.target_prop
           setTargets(monitor_settings.cash_target)
         } catch (ex) {
-          console.log(ex)
+          // initial target (if not saved in a file)
+          setTargets(0.22)
         }
-        
         
         // Triggers, balance allocation based on price
-        var up_triggers = [0, 498.8, 99.7]
-        var down_triggers = [0,0,0]
+        // loads the cashTriggers function
+        require("../monitor_cfg.js");
         
-        function priceTriggers() {
-          var summary
-          var do_rebalance = false
-          for (var i=0; i<ss.length; i++) {
-            summary = ss[i].summary
-            mid_price = (n(summary.ask) + n(summary.bid))/2
-            if (down_triggers[i] > 0 && mid_price < down_triggers[i]) {
-              do_rebalance = true
-              down_triggers[i] = 0
-              console.log("Price action for", ss[i].product_id, "triggered rebalance")
-            }
-            if (up_triggers[i] > 0 && mid_price > up_triggers[i]) {
-              do_rebalance = true
-              up_triggers[i] = 0
-              console.log("Price action for", ss[i].product_id, "triggered rebalance")
-            }
-          }
-          if (do_rebalance) rebalance(rebalance_now = "all")
-        }
-        
-        // Triggers, updates the cash_target based on value
-        function cashTriggers(val, params=null) {
-          var targ = cash_target
-          // price rising
-          if (val > 36000 && cash_target < 0.15) targ = 0.15
-          if (val > 39000 && cash_target < 0.155) targ= 0.155
-          if (val > 42000 && cash_target < 0.16) targ = 0.16
-          if (val > 44000 && cash_target < 0.17) targ = 0.17
-          if (val > 47000 && cash_target < 0.18) targ = 0.18
-          if (val > 49000 && cash_target < 0.19) targ = 0.19
-          if (val > 51000 && cash_target < 0.20) targ = 0.20
-          if (val > 54000 && cash_target < 0.22) targ = 0.22
-          if (val > 56000 && cash_target < 0.25) targ = 0.25
-          //if (val > 57000 && cash_target < 0.24) targ = 0.24
-          //if (val > 58500 && cash_target < 0.26) targ = 0.26
-          if (val > 60000 && cash_target < 0.27) targ = 0.27
-          if (val > 63000 && cash_target < 0.27) targ = 0.30
-          
-          // price dropping
-          if (val < 53500 && cash_target > 0.20) {
-            targ = 0.20
-          }
-          if (val < 50500 && cash_target > 0.19) targ = 0.19
-          if (val < 48500 && cash_target > 0.18) targ = 0.18
-          if (val < 46500 && cash_target > 0.17) targ = 0.17
-          if (val < 43500 && cash_target > 0.16) targ = 0.16
-          if (val < 41500 && cash_target > 0.155) targ = 0.155
-          if (val < 38500 && cash_target > 0.15) targ = 0.15
-          if (val < 35500 && cash_target > 0.14) {
-            targ = 0.14
-            buy_only = true
-          } 
-          
-          setTargets(targ)
-        }
         
         // calculate the targets, adjusting for the given cash_target
+        // reset=true will adjust the 
         function setTargets(ctarget) {
-          if (ctarget == cash_target) return    // target has not changed
-          cash_target = ctarget
+          if (ctarget != cash_target) cash_target = ctarget
           
           var targets = target_prop.slice();
           
@@ -190,6 +134,17 @@ module.exports = function container (get, set, clear) {
           console.log(targets_rounded, cash_target)
         }
         
+        function setProp(atarget) {
+          var changed = false
+          for (var i=0; i<atarget.length; i++) {
+            if (target_prop[i] != atarget[i]) changed = true
+          }
+          if (changed) {
+            target_prop = atarget
+            setTargets(cash_target)
+          }
+        }
+        
         
         // ========================================
         // gets the quote and balance of a product                
@@ -202,6 +157,8 @@ module.exports = function container (get, set, clear) {
                 console.log(err)
               return cb(null, err)
             }
+            
+            balance.asset = n(balance.asset) + s.reserved
             
             var summary = {product: s.product_id, asset: balance.asset, currency: balance.currency}
 
@@ -250,7 +207,7 @@ module.exports = function container (get, set, clear) {
           for (var i=0; i<ss.length; i++) {
             summary = ss[i].summary
             target_value = n(summary.target_pct) * n(account_value)
-            mid_price = (n(summary.ask) + n(summary.bid))/2
+            mid_price = summary.mid
             
             if (target_value > summary.asset_value * (1+trigger_pct)) {
               
@@ -480,12 +437,13 @@ module.exports = function container (get, set, clear) {
                 return
               }
             
-              var account_value = all_assets + summary.currency_value  
+              var account_value = all_assets + summary.currency_value
+              var prices = [] 
               for (var i=0; i<ss.length; i++) {
                 summary = ss[i].summary
-                
+                prices.push(summary.mid)
                 percent = summary.asset_value/account_value
-                myLog(summary.product + ": " + n(summary.asset).format('0.00') + " " + summary.ask + " Value: " + summary.asset_value.format('0.00') + " " + n(summary.asset_value/account_value*100).format('0.0') + "%")
+                myLog(summary.product + ": " + Number(summary.asset).toPrecision(4) + " " + summary.ask + " Value: " + summary.asset_value.format('0.00') + " " + n(summary.asset_value/account_value*100).format('0.0') + "%")
               }
               
               myLog("CASH: " + n(summary.currency_value).format('0.00') + " " + n(summary.currency_value/account_value * 100).format('0.0') + "%")
@@ -493,7 +451,10 @@ module.exports = function container (get, set, clear) {
               myLog(formatDate())
               console.log("Auto-rebalance (o):", manual_order)
               
-              cashTriggers(account_value)
+              // update the allocation if triggered by price action
+              priceTriggers(account_value, prices, setProp)
+              cashTriggers(account_value, cash_target, setTargets)
+              
               
               if (cash_target > n(summary.currency_value).divide(account_value) * (1+argv.trigger_pct)) {
                 if (!buy_only) {
@@ -537,11 +498,9 @@ module.exports = function container (get, set, clear) {
         process.stdin.on('keypress', function (ch, key) {
           //console.log('got "keypress"', key, ch);
           if (ch == '-') {
-            cash_target -= 0.01
-            setTargets()
+            setTargets(cash_target - 0.01)
           } else if (ch == '=') {
-            cash_target += 0.01
-            setTargets()
+            setTargets(cash_target + 0.01)
           } else if (key != undefined) {
           
             if (key && (key.ctrl && key.name == 'c') || key.name == 'q') {
