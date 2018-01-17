@@ -74,8 +74,8 @@ module.exports = function container (get, set, clear) {
         selectors = ['gdax.BTC-USD', 'gdax.ETH-USD', 'gdax.LTC-USD']
         s.currency = 'USD'
         // how much of each asset is in cold storage?
-        var reserved_assets = [0,0,0]
-        var reserved_cash = 6000 - 1468
+        var reserved_assets = [0,0,0.6]
+        var reserved_cash = 9000 - 1468 + 3000 + 3000 + 3000
         var leverage = 1.5
         
         // initialize the exchanges
@@ -115,8 +115,7 @@ module.exports = function container (get, set, clear) {
         require("../monitor_cfg.js");
         
         
-        // calculate the targets, adjusting for the given cash_target
-        // reset=true will adjust the 
+        // calculate the target percentages, adjusting for the given ctarget percentage
         function setTargets(ctarget) {
           if (ctarget != cash_target) cash_target = ctarget
           
@@ -134,14 +133,25 @@ module.exports = function container (get, set, clear) {
           console.log(targets_rounded, cash_target)
         }
         
-        function setProp(atarget) {
+        // change either the allocation proportions or the cash target
+        function setProp(atarget, ctarget=null) {
           var changed = false
-          for (var i=0; i<atarget.length; i++) {
-            if (target_prop[i] != atarget[i]) changed = true
+          
+          if (ctarget && (ctarget != cash_target)) changed = true
+          
+          if (atarget) {
+            for (var i=0; i<atarget.length; i++) {
+              if (target_prop[i] != atarget[i]) changed = true
+            }
           }
+          
           if (changed) {
-            target_prop = atarget
-            setTargets(cash_target)
+            if (atarget) target_prop = atarget
+            if (ctarget) {
+              setTargets(ctarget)
+            } else {
+              setTargets(cash_target)
+            }
           }
         }
         
@@ -170,7 +180,7 @@ module.exports = function container (get, set, clear) {
               s.quote = quote
               asset_value = n(balance.asset).multiply(quote.ask)
               summary.currency_value = n(balance.currency) + reserved_cash
-              //myLog(s.product_id + ": " + n(balance.asset).format('0.00') + " " + quote.ask + " Total: " + asset_value.format('0.00'))
+              //console.log(quote)
               summary.ask = quote.ask
               summary.bid = quote.bid
               summary.mid = 0.5 * n(quote.ask).add(quote.bid)
@@ -185,8 +195,15 @@ module.exports = function container (get, set, clear) {
           
         }
         
+        // wrapper for rebalancing
+        function reb_now() {
+          // manual_order = true
+          rebalance(rebalance_now = "all")
+        }
+        
         // rebalance all products (and cash) to match the target allocation
         function rebalance(rebalance_now) {
+          var last_order
           var account_value = ss[0].summary.currency_value
           
           for (var i=0; i<ss.length; i++) {
@@ -209,6 +226,7 @@ module.exports = function container (get, set, clear) {
             target_value = n(summary.target_pct) * n(account_value)
             mid_price = summary.mid
             
+            // buy
             if (target_value > summary.asset_value * (1+trigger_pct)) {
               
               if (rebalance_now == "buy" || rebalance_now == "all" || rebalance_now == false || rebalance_now == "check") {
@@ -228,6 +246,8 @@ module.exports = function container (get, set, clear) {
                 opt = {product_id: summary.product, size: size, price: offer_price, side: "buy"}
                 order_list.push(opt)
               }
+              
+            // sell  
             } else if (buy_only==false && target_value < summary.asset_value * (1-trigger_pct)) {
               if (rebalance_now == "sell" || rebalance_now == "all" || rebalance_now == false  || rebalance_now == "check") {
                 size = (summary.asset_value-target_value) / summary.bid
@@ -425,7 +445,7 @@ module.exports = function container (get, set, clear) {
             // check error
           
             counter = counter-1
-            if (err) {
+            if (err || summary == null) {
               err_flag = true
             } else {
               all_assets = all_assets + summary.asset_value
@@ -454,6 +474,8 @@ module.exports = function container (get, set, clear) {
               // update the allocation if triggered by price action
               priceTriggers(account_value, prices, setProp)
               cashTriggers(account_value, cash_target, setTargets)
+              // rebalance if we hit a set value
+              triggerOnce(account_value, cash_target, reb_now)
               
               
               if (cash_target > n(summary.currency_value).divide(account_value) * (1+argv.trigger_pct)) {
